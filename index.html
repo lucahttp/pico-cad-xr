@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>PICO CAD MR — WebXR Spatial Tinkercad</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="ui-overlay">
+    <!-- Header -->
+    <header class="top-header glass-panel">
+      <div class="brand-badge">
+        <span class="brand-title">PICO CAD MR</span>
+        <span class="brand-tag">WebXR Passthrough</span>
+      </div>
+
+      <div class="status-indicator">
+        <span class="status-dot"></span>
+        <span id="session-status">PICO OS / OpenXR Ready</span>
+      </div>
+
+      <button id="btn-enter-xr" class="btn-xr">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          <line x1="7" y1="12" x2="17" y2="12"></line>
+        </svg>
+        Entrar a MR (Passthrough)
+      </button>
+    </header>
+
+    <!-- Main Sidebar -->
+    <div class="main-layout">
+      <aside class="tools-sidebar glass-panel">
+        <div class="section-label">Primitivas</div>
+        <div class="tool-grid">
+          <button class="btn-tool" id="tool-box">📦 Cubo</button>
+          <button class="btn-tool" id="tool-cyl">🥫 Cilindro</button>
+          <button class="btn-tool" id="tool-sphere">🔮 Esfera</button>
+          <button class="btn-tool" id="tool-cone">📐 Cono</button>
+          <button class="btn-tool" id="tool-wedge">🔺 Cuña</button>
+          <button class="btn-tool" id="tool-torus">🍩 Torus</button>
+        </div>
+
+        <div class="section-label">Propiedades</div>
+        <button class="btn-tool" id="tool-toggle-hole" style="width: 100%;">
+          🕳️ Alternar Sólido / Hueco
+        </button>
+
+        <div class="section-label">Operaciones CSG</div>
+        <button class="btn-action-primary" id="tool-group" style="width: 100%;">
+          ⚡ Agrupar (Unión / Corte)
+        </button>
+
+        <div class="tool-grid" style="margin-top: 6px;">
+          <button class="btn-tool" id="tool-duplicate">📄 Duplicar</button>
+          <button class="btn-tool btn-danger" id="tool-delete">🗑️ Eliminar</button>
+        </div>
+
+        <div class="section-label">Exportación</div>
+        <button class="btn-tool" id="tool-export-stl" style="width: 100%; margin-bottom: 4px;">
+          💾 Descargar STL (3D Print)
+        </button>
+        <button class="btn-tool" id="tool-export-gltf" style="width: 100%;">
+          🌐 Descargar glTF
+        </button>
+
+        <button class="btn-tool" id="tool-clear" style="width: 100%; margin-top: 10px; opacity: 0.8;">
+          Limpiar Mesa
+        </button>
+      </aside>
+    </div>
+
+    <!-- Bottom Cheatsheet -->
+    <footer class="bottom-bar glass-panel">
+      <div>
+        <span>Modo Desktop / Emulador:</span>
+        <span class="shortcut-badge">Click</span> Seleccionar ·
+        <span class="shortcut-badge">G</span> Agrupar CSG ·
+        <span class="shortcut-badge">H</span> Sólido/Hueco ·
+        <span class="shortcut-badge">Supr</span> Borrar
+      </div>
+      <div>
+        <span>En PICO Visor:</span>
+        <span class="shortcut-badge">Gatillo</span> Agarrar / Click UI ·
+        <span class="shortcut-badge">Grip</span> Alternar Hueco
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
