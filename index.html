@@ -3,89 +3,303 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>PICO CAD MR — WebXR Spatial Tinkercad</title>
+  <title>SketchForge XR — PICO CAD Spatial Studio</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <div id="canvas-container"></div>
 
   <div class="ui-overlay">
-    <!-- Header -->
+    <!-- Top CAD Navigation & Action Bar -->
     <header class="top-header glass-panel">
-      <div class="brand-badge">
-        <span class="brand-title">PICO CAD MR</span>
-        <span class="brand-tag">WebXR Passthrough</span>
+      <div class="header-left">
+        <div class="brand-badge">
+          <svg class="brand-logo" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <div class="brand-titles">
+            <span class="brand-title">SketchForge <span class="accent-xr">XR</span></span>
+            <span class="brand-tag">PICO 4 CAD Studio</span>
+          </div>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- History & Quick Actions -->
+        <div class="action-btn-group">
+          <button id="btn-undo" class="btn-icon" title="Deshacer (Ctrl+Z)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+          </button>
+          <button id="btn-redo" class="btn-icon" title="Rehacer (Ctrl+Y)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
+          </button>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- CSG Operations -->
+        <div class="action-btn-group">
+          <button id="btn-group" class="btn-action-highlight" title="Agrupar: Unión de sólidos o corte con huecos (G)">
+            ⚡ Agrupar
+          </button>
+          <button id="btn-intersect" class="btn-action-secondary" title="Intersección booleana">
+            ✂️ Intersect
+          </button>
+          <button id="btn-toggle-hole" class="btn-action-secondary" title="Alternar Sólido / Hueco (H)">
+            🕳️ Hueco
+          </button>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- Workplane & Alignment -->
+        <div class="action-btn-group">
+          <button id="btn-drop" class="btn-icon-text" title="Asentar base del objeto en la mesa Y=0 (D)">
+            ⬇️ Mesa
+          </button>
+          <div class="grid-snap-wrapper">
+            <span class="snap-label">Grilla:</span>
+            <select id="select-grid-snap" class="grid-select">
+              <option value="0">Off</option>
+              <option value="1">1 mm</option>
+              <option value="5">5 mm</option>
+              <option value="10">10 mm</option>
+              <option value="25" selected>25 mm</option>
+              <option value="50">50 mm</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <div class="status-indicator">
-        <span class="status-dot"></span>
-        <span id="session-status">PICO OS / OpenXR Ready</span>
-      </div>
+      <div class="header-right">
+        <!-- Export Dropdown -->
+        <div class="export-group">
+          <button id="btn-export-stl" class="btn-export" title="Descargar STL optimizado para impresión 3D">
+            💾 Exportar STL
+          </button>
+          <button id="btn-export-gltf" class="btn-export-sub" title="Descargar glTF">
+            glTF
+          </button>
+        </div>
 
-      <button id="btn-enter-xr" class="btn-xr">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          <line x1="7" y1="12" x2="17" y2="12"></line>
-        </svg>
-        Entrar a MR (Passthrough)
-      </button>
+        <div class="toolbar-divider"></div>
+
+        <!-- Status & WebXR Button -->
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span id="session-status">PICO OS / OpenXR Ready</span>
+        </div>
+
+        <button id="btn-enter-xr" class="btn-xr">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            <line x1="7" y1="12" x2="17" y2="12"></line>
+          </svg>
+          Entrar a MR
+        </button>
+      </div>
     </header>
 
-    <!-- Main Sidebar -->
+    <!-- Main Workspace Layout -->
     <div class="main-layout">
-      <aside class="tools-sidebar glass-panel">
-        <div class="section-label">Primitivas</div>
-        <div class="tool-grid">
-          <button class="btn-tool" id="tool-box">📦 Cubo</button>
-          <button class="btn-tool" id="tool-cyl">🥫 Cilindro</button>
-          <button class="btn-tool" id="tool-sphere">🔮 Esfera</button>
-          <button class="btn-tool" id="tool-cone">📐 Cono</button>
-          <button class="btn-tool" id="tool-wedge">🔺 Cuña</button>
-          <button class="btn-tool" id="tool-torus">🍩 Torus</button>
+      <!-- Left Shape Catalog (SketchForge Primitives) -->
+      <aside class="shape-catalog glass-panel">
+        <div class="catalog-header">
+          <span class="section-title">Catálogo 3D</span>
+          <div class="catalog-filter-chips">
+            <button class="filter-chip active" data-cat="all">Todos</button>
+            <button class="filter-chip" data-cat="basic">Básicos</button>
+          </div>
         </div>
 
-        <div class="section-label">Propiedades</div>
-        <button class="btn-tool" id="tool-toggle-hole" style="width: 100%;">
-          🕳️ Alternar Sólido / Hueco
-        </button>
+        <div class="catalog-grid">
+          <button class="shape-card" data-primitive="box">
+            <div class="shape-preview box-preview"></div>
+            <span class="shape-name">Cubo</span>
+            <span class="shape-dim">200 mm</span>
+          </button>
 
-        <div class="section-label">Operaciones CSG</div>
-        <button class="btn-action-primary" id="tool-group" style="width: 100%;">
-          ⚡ Agrupar (Unión / Corte)
-        </button>
+          <button class="shape-card" data-primitive="cylinder">
+            <div class="shape-preview cyl-preview"></div>
+            <span class="shape-name">Cilindro</span>
+            <span class="shape-dim">Ø200 mm</span>
+          </button>
 
-        <div class="tool-grid" style="margin-top: 6px;">
-          <button class="btn-tool" id="tool-duplicate">📄 Duplicar</button>
-          <button class="btn-tool btn-danger" id="tool-delete">🗑️ Eliminar</button>
+          <button class="shape-card" data-primitive="sphere">
+            <div class="shape-preview sphere-preview"></div>
+            <span class="shape-name">Esfera</span>
+            <span class="shape-dim">Ø200 mm</span>
+          </button>
+
+          <button class="shape-card" data-primitive="cone">
+            <div class="shape-preview cone-preview"></div>
+            <span class="shape-name">Cono</span>
+            <span class="shape-dim">Ø200 mm</span>
+          </button>
+
+          <button class="shape-card" data-primitive="wedge">
+            <div class="shape-preview wedge-preview"></div>
+            <span class="shape-name">Cuña</span>
+            <span class="shape-dim">45° Ramp</span>
+          </button>
+
+          <button class="shape-card" data-primitive="pyramid">
+            <div class="shape-preview pyramid-preview"></div>
+            <span class="shape-name">Pirámide</span>
+            <span class="shape-dim">4 Caras</span>
+          </button>
+
+          <button class="shape-card" data-primitive="torus">
+            <div class="shape-preview torus-preview"></div>
+            <span class="shape-name">Torus</span>
+            <span class="shape-dim">Donut</span>
+          </button>
+
+          <button class="shape-card" data-primitive="roof">
+            <div class="shape-preview roof-preview"></div>
+            <span class="shape-name">Techo</span>
+            <span class="shape-dim">Prisma</span>
+          </button>
         </div>
 
-        <div class="section-label">Exportación</div>
-        <button class="btn-tool" id="tool-export-stl" style="width: 100%; margin-bottom: 4px;">
-          💾 Descargar STL (3D Print)
-        </button>
-        <button class="btn-tool" id="tool-export-gltf" style="width: 100%;">
-          🌐 Descargar glTF
-        </button>
+        <!-- Quick Spawn Options -->
+        <div class="spawn-pref">
+          <span class="pref-label">Crear como:</span>
+          <div class="pref-toggle">
+            <button id="pref-solid" class="pref-btn active">Sólido</button>
+            <button id="pref-hole" class="pref-btn">Hueco</button>
+          </div>
+        </div>
 
-        <button class="btn-tool" id="tool-clear" style="width: 100%; margin-top: 10px; opacity: 0.8;">
-          Limpiar Mesa
-        </button>
+        <div class="catalog-footer">
+          <button id="btn-clear-scene" class="btn-link-danger">Limpiar Escena</button>
+        </div>
+      </aside>
+
+      <!-- Center Spatial Viewport is the 3D Canvas -->
+
+      <!-- Right Shape Inspector (SketchForge Inspector + Gravity Sketch Materials) -->
+      <aside id="shape-inspector" class="shape-inspector glass-panel">
+        <div class="inspector-header">
+          <div class="inspector-title-row">
+            <span id="inspect-type" class="inspector-title">Cubo</span>
+            <span id="inspect-badge" class="badge-solid">Sólido</span>
+          </div>
+          <span id="inspect-id" class="inspector-subtitle">cad_001</span>
+        </div>
+
+        <div id="inspector-content">
+          <!-- Dimensions Section -->
+          <div class="inspector-section">
+            <div class="section-title-row">
+              <span class="section-title">Dimensiones (mm)</span>
+              <button id="btn-scale-reset" class="btn-micro" title="Restaurar a 200 mm">1:1</button>
+            </div>
+
+            <div class="dimension-row">
+              <span class="dim-axis axis-x">X</span>
+              <input type="number" id="dim-width" class="dim-input" value="200" step="5" min="10" max="4000" />
+              <div class="stepper-btns">
+                <button class="btn-step" data-axis="x" data-dir="1">+</button>
+                <button class="btn-step" data-axis="x" data-dir="-1">-</button>
+              </div>
+            </div>
+
+            <div class="dimension-row">
+              <span class="dim-axis axis-y">Y</span>
+              <input type="number" id="dim-height" class="dim-input" value="200" step="5" min="10" max="4000" />
+              <div class="stepper-btns">
+                <button class="btn-step" data-axis="y" data-dir="1">+</button>
+                <button class="btn-step" data-axis="y" data-dir="-1">-</button>
+              </div>
+            </div>
+
+            <div class="dimension-row">
+              <span class="dim-axis axis-z">Z</span>
+              <input type="number" id="dim-depth" class="dim-input" value="200" step="5" min="10" max="4000" />
+              <div class="stepper-btns">
+                <button class="btn-step" data-axis="z" data-dir="1">+</button>
+                <button class="btn-step" data-axis="z" data-dir="-1">-</button>
+              </div>
+            </div>
+
+            <!-- Quick Scale Steppers -->
+            <div class="quick-scale-row">
+              <button class="btn-quick-scale" data-scale="0.8">-20%</button>
+              <button class="btn-quick-scale" data-scale="0.9">-10%</button>
+              <button class="btn-quick-scale" data-scale="1.1">+10%</button>
+              <button class="btn-quick-scale" data-scale="1.2">+20%</button>
+            </div>
+          </div>
+
+          <!-- Color Swatches (SketchForge CAD Palette) -->
+          <div class="inspector-section">
+            <span class="section-title">Color CAD</span>
+            <div class="color-palette-grid">
+              <button class="color-swatch active" data-color="#2563eb" style="background-color: #2563eb;"></button>
+              <button class="color-swatch" data-color="#0284c7" style="background-color: #0284c7;"></button>
+              <button class="color-swatch" data-color="#06b6d4" style="background-color: #06b6d4;"></button>
+              <button class="color-swatch" data-color="#10b981" style="background-color: #10b981;"></button>
+              <button class="color-swatch" data-color="#84cc16" style="background-color: #84cc16;"></button>
+              <button class="color-swatch" data-color="#eab308" style="background-color: #eab308;"></button>
+              <button class="color-swatch" data-color="#f97316" style="background-color: #f97316;"></button>
+              <button class="color-swatch" data-color="#ef4444" style="background-color: #ef4444;"></button>
+              <button class="color-swatch" data-color="#ec4899" style="background-color: #ec4899;"></button>
+              <button class="color-swatch" data-color="#8b5cf6" style="background-color: #8b5cf6;"></button>
+              <button class="color-swatch" data-color="#64748b" style="background-color: #64748b;"></button>
+              <button class="color-swatch" data-color="#1e293b" style="background-color: #1e293b;"></button>
+            </div>
+          </div>
+
+          <!-- Material Finish (Gravity Sketch 6.0 Style) -->
+          <div class="inspector-section">
+            <span class="section-title">Acabado de Material</span>
+            <div class="finish-pill-group">
+              <button class="btn-finish active" data-style="basic">Básico</button>
+              <button class="btn-finish" data-style="reflective">Reflectivo</button>
+              <button class="btn-finish" data-style="clay">Arcilla</button>
+            </div>
+          </div>
+
+          <!-- Quick Actions on Selected -->
+          <div class="inspector-section action-section">
+            <button id="inspect-drop" class="btn-inspector-action">
+              ⬇️ Bajar a Mesa (Y=0)
+            </button>
+            <button id="inspect-rotate" class="btn-inspector-action">
+              🔄 Rotar 90°
+            </button>
+            <div class="dual-btn-row">
+              <button id="inspect-duplicate" class="btn-secondary-tool">📋 Duplicar</button>
+              <button id="inspect-delete" class="btn-danger-tool">🗑️ Borrar</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="inspector-empty" class="inspector-empty-state" style="display: none;">
+          <p class="empty-text">Haga click en un objeto de la escena para inspeccionar y modificar sus dimensiones y materiales.</p>
+        </div>
       </aside>
     </div>
 
-    <!-- Bottom Cheatsheet -->
+    <!-- Bottom Cheatsheet / Status Bar -->
     <footer class="bottom-bar glass-panel">
-      <div>
-        <span>Modo Desktop / Emulador:</span>
-        <span class="shortcut-badge">Click</span> Seleccionar ·
-        <span class="shortcut-badge">G</span> Agrupar CSG ·
-        <span class="shortcut-badge">H</span> Sólido/Hueco ·
-        <span class="shortcut-badge">Supr</span> Borrar
+      <div class="cheatsheet-col">
+        <span class="cheat-label">Escritorio:</span>
+        <span class="cheat-item"><kbd>Click</kbd> Seleccionar</span>
+        <span class="cheat-item"><kbd>G</kbd> Agrupar</span>
+        <span class="cheat-item"><kbd>H</kbd> Hueco</span>
+        <span class="cheat-item"><kbd>D</kbd> Bajar a Mesa</span>
+        <span class="cheat-item"><kbd>Supr</kbd> Borrar</span>
       </div>
-      <div>
-        <span>En PICO Visor:</span>
-        <span class="shortcut-badge">Gatillo</span> Agarrar / Click UI ·
-        <span class="shortcut-badge">Grip</span> Alternar Hueco
+      <div class="cheatsheet-col xr-col">
+        <span class="cheat-label">PICO 4 Visor:</span>
+        <span class="cheat-item"><kbd>Gatillo</kbd> Agarrar / UI</span>
+        <span class="cheat-item"><kbd>Thumbstick ↔</kbd> Escalar</span>
+        <span class="cheat-item"><kbd>Thumbstick ↕</kbd> Profundidad</span>
+        <span class="cheat-item"><kbd>Grip</kbd> Hueco</span>
       </div>
     </footer>
   </div>
