@@ -49,6 +49,7 @@ class PicoCadApp {
     this.spatialUI = new SpatialUI(this.scene, {
       addPrimitive: (type) => this.addPrimitive(type),
       toggleHole: () => this.toggleHole(),
+      scaleSelected: (factor) => this.scaleSelected(factor),
       group: () => this.group(),
       duplicate: () => this.duplicate(),
       delete: () => this.deleteSelected(),
@@ -125,6 +126,16 @@ class PicoCadApp {
     const selected = Array.from(this.csgEngine.selectedObjects);
     if (selected.length > 0) {
       selected.forEach(obj => this.csgEngine.toggleHole(obj));
+      this._updateSelectionHelper();
+    }
+  }
+
+  scaleSelected(factor = 1.2) {
+    const selected = Array.from(this.csgEngine.selectedObjects)[0];
+    if (selected) {
+      selected.scale.multiplyScalar(factor);
+      selected.scale.clampScalar(0.08, 4.0);
+      selected.updateMatrixWorld(true);
       this._updateSelectionHelper();
     }
   }
@@ -249,84 +260,80 @@ class PicoCadApp {
       }
     });
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts for testing
     window.addEventListener('keydown', (e) => {
-      switch (e.code) {
-        case 'KeyG':
-          this.group();
-          break;
-        case 'KeyH':
-          this.toggleHole();
-          break;
-        case 'KeyD':
-          this.duplicate();
-          break;
-        case 'Delete':
-        case 'Backspace':
-          this.deleteSelected();
-          break;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        this.deleteSelected();
+      } else if (e.key === 'h' || e.key === 'H') {
+        this.toggleHole();
+      } else if (e.key === 'g' || e.key === 'G') {
+        this.group();
+      } else if (e.key === '+' || e.key === '=') {
+        this.scaleSelected(1.2);
+      } else if (e.key === '-' || e.key === '_') {
+        this.scaleSelected(0.8);
       }
     });
 
-    // 2D UI Button bindings
-    document.getElementById('tool-box').onclick = () => this.addPrimitive('box');
-    document.getElementById('tool-cyl').onclick = () => this.addPrimitive('cylinder');
-    document.getElementById('tool-sphere').onclick = () => this.addPrimitive('sphere');
-    document.getElementById('tool-cone').onclick = () => this.addPrimitive('cone');
-    document.getElementById('tool-wedge').onclick = () => this.addPrimitive('wedge');
-    document.getElementById('tool-torus').onclick = () => this.addPrimitive('torus');
+    // 2D HTML UI Bindings
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const prim = e.currentTarget.dataset.primitive;
+        const action = e.currentTarget.dataset.action;
+        if (prim) this.addPrimitive(prim);
+        if (action === 'hole') this.toggleHole();
+        if (action === 'group') this.group();
+        if (action === 'duplicate') this.duplicate();
+        if (action === 'delete') this.deleteSelected();
+        if (action === 'export-stl') this.exportSTL();
+        if (action === 'export-gltf') this.exportGLTF();
+      });
+    });
 
-    document.getElementById('tool-toggle-hole').onclick = () => this.toggleHole();
-    document.getElementById('tool-group').onclick = () => this.group();
-    document.getElementById('tool-duplicate').onclick = () => this.duplicate();
-    document.getElementById('tool-delete').onclick = () => this.deleteSelected();
-    document.getElementById('tool-export-stl').onclick = () => this.exportSTL();
-    document.getElementById('tool-export-gltf').onclick = () => this.exportGLTF();
-    document.getElementById('tool-clear').onclick = () => this.clearAll();
-
-    // WebXR / Passthrough Button
-    const xrBtn = document.getElementById('btn-enter-xr');
-    xrBtn.onclick = async () => {
-      try {
-        await this.xrManager.startSession(
-          (isAr) => {
-            // When entering XR:
-            document.querySelector('.ui-overlay').style.display = 'none';
-            this.controls.enabled = false;
-
-            if (isAr) {
-              // PICO Passthrough mode: transparent background so real world cameras show through!
-              this.scene.background = null;
-              this.renderer.setClearColor(0x000000, 0);
+    // Enter MR Button
+    const enterMrBtn = document.getElementById('enter-mr-btn');
+    if (enterMrBtn) {
+      enterMrBtn.addEventListener('click', async () => {
+        try {
+          await this.xrManager.startSession(
+            (isAr) => {
+              enterMrBtn.innerText = 'Salir de MR';
+              document.body.classList.add('in-xr');
+              if (isAr) {
+                this.scene.background = null; // transparent for passthrough
+                this.shadowPlane.visible = false;
+              }
+            },
+            () => {
+              enterMrBtn.innerText = 'Entrar a MR (Passthrough)';
+              document.body.classList.remove('in-xr');
+              this.scene.background = new THREE.Color(0x0a0f1d);
+              this.shadowPlane.visible = true;
             }
-          },
-          () => {
-            // When exiting XR:
-            document.querySelector('.ui-overlay').style.display = 'flex';
-            this.controls.enabled = true;
-            this.scene.background = new THREE.Color(0x0a0f1d);
-          }
-        );
-      } catch (err) {
-        console.error('Error al iniciar WebXR:', err);
-        alert('WebXR no pudo iniciar: ' + err.message + '\n\nEn desktop use la extensión "Immersive Web Emulator". En PICO, abra esta URL bajo HTTPS en el Pico Browser.');
-      }
-    };
+          );
+        } catch (err) {
+          alert('Error iniciando sesión WebXR: ' + err.message);
+        }
+      });
+    }
   }
 
   _render() {
-    if (this.renderer.xr.isPresenting) {
-      this.xrManager.update();
-    } else {
+    if (!this.renderer.xr.isPresenting) {
       this.controls.update();
+    } else {
+      this.xrManager.update();
     }
 
-    this._updateSelectionHelper();
+    if (this.selectionBox.visible) {
+      this.selectionBox.update();
+    }
+
     this.renderer.render(this.scene, this.camera);
   }
 }
 
+// Bootstrap application on load
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('[pico-cad-xr] canvas + WebGL OK, v1.0.0');
   new PicoCadApp();
 });

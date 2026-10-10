@@ -75,12 +75,12 @@ export class SpatialUI {
   }
 
   _buildPanel() {
-    // Backing holographic frame
-    const frameGeom = new THREE.BoxGeometry(0.58, 0.72, 0.01);
+    // Backing holographic frame (expanded to accommodate transform row)
+    const frameGeom = new THREE.BoxGeometry(0.58, 0.84, 0.01);
     const frameMat = new THREE.MeshPhysicalMaterial({
       color: 0x090d16,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.88,
       roughness: 0.2,
       metalness: 0.5,
       clearcoat: 0.8
@@ -89,28 +89,42 @@ export class SpatialUI {
     this.container.add(frame);
 
     // Title banner
-    const titleTex = this._createButtonTexture('PICO CAD MR', '#0284c7', '#ffffff', 'Tinkercad Spatial');
+    const titleTex = this._createButtonTexture('PICO CAD MR', '#0284c7', '#ffffff', 'SketchForge Spatial Edition');
     const titleMesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.52, 0.09, 0.015),
       new THREE.MeshStandardMaterial({ map: titleTex })
     );
-    titleMesh.position.set(0, 0.28, 0.012);
+    titleMesh.position.set(0, 0.33, 0.012);
     this.container.add(titleMesh);
 
     // Primitives section (Row 1 & 2)
     const bw = 0.155;
-    const bh = 0.08;
-    this._addButton(-0.17, 0.17, bw, bh, '+ Cubo', '', () => this.callbacks.addPrimitive('box'), '#1e293b');
-    this._addButton(0, 0.17, bw, bh, '+ Cilindro', '', () => this.callbacks.addPrimitive('cylinder'), '#1e293b');
-    this._addButton(0.17, 0.17, bw, bh, '+ Esfera', '', () => this.callbacks.addPrimitive('sphere'), '#1e293b');
+    const bh = 0.075;
+    this._addButton(-0.17, 0.22, bw, bh, '+ Cubo', '', () => this.callbacks.addPrimitive('box'), '#1e293b');
+    this._addButton(0, 0.22, bw, bh, '+ Cilindro', '', () => this.callbacks.addPrimitive('cylinder'), '#1e293b');
+    this._addButton(0.17, 0.22, bw, bh, '+ Esfera', '', () => this.callbacks.addPrimitive('sphere'), '#1e293b');
 
-    this._addButton(-0.17, 0.07, bw, bh, '+ Cono', '', () => this.callbacks.addPrimitive('cone'), '#1e293b');
-    this._addButton(0, 0.07, bw, bh, '+ Cuña', '', () => this.callbacks.addPrimitive('wedge'), '#1e293b');
-    this._addButton(0.17, 0.07, bw, bh, '+ Torus', '', () => this.callbacks.addPrimitive('torus'), '#1e293b');
+    this._addButton(-0.17, 0.13, bw, bh, '+ Cono', '', () => this.callbacks.addPrimitive('cone'), '#1e293b');
+    this._addButton(0, 0.13, bw, bh, '+ Cuña', '', () => this.callbacks.addPrimitive('wedge'), '#1e293b');
+    this._addButton(0.17, 0.13, bw, bh, '+ Torus', '', () => this.callbacks.addPrimitive('torus'), '#1e293b');
+
+    // Transform Row (SketchForge direct scaling controls)
+    this._addButton(
+      -0.14, 0.03, 0.22, 0.075,
+      'Escalar +', '+20% tamaño',
+      () => this.callbacks.scaleSelected && this.callbacks.scaleSelected(1.2),
+      '#1e293b'
+    );
+    this._addButton(
+      0.14, 0.03, 0.22, 0.075,
+      'Escalar -', '-20% tamaño',
+      () => this.callbacks.scaleSelected && this.callbacks.scaleSelected(0.8),
+      '#1e293b'
+    );
 
     // Solid vs Hole Toggle
     this.holeBtn = this._addButton(
-      -0.12, -0.04, 0.25, 0.09,
+      -0.12, -0.07, 0.25, 0.08,
       'Sólido / Hueco', 'Alternar corte',
       () => this.callbacks.toggleHole(),
       '#334155'
@@ -118,7 +132,7 @@ export class SpatialUI {
 
     // Group (Boolean CSG)
     this._addButton(
-      0.14, -0.04, 0.22, 0.09,
+      0.14, -0.07, 0.22, 0.08,
       '⚡ Agrupar', 'Unión / Corte CSG',
       () => this.callbacks.group(),
       '#166534' // Forest green
@@ -126,13 +140,13 @@ export class SpatialUI {
 
     // Utility row: Duplicate, Delete
     this._addButton(
-      -0.14, -0.15, 0.22, 0.08,
+      -0.14, -0.17, 0.22, 0.075,
       'Duplicar', '',
       () => this.callbacks.duplicate(),
       '#1e293b'
     );
     this._addButton(
-      0.14, -0.15, 0.22, 0.08,
+      0.14, -0.17, 0.22, 0.075,
       'Eliminar', '',
       () => this.callbacks.delete(),
       '#991b1b' // Dark red
@@ -140,13 +154,13 @@ export class SpatialUI {
 
     // Bottom row: Export STL & Clear
     this._addButton(
-      -0.12, -0.25, 0.24, 0.08,
+      -0.12, -0.27, 0.24, 0.075,
       'Exportar STL', '',
       () => this.callbacks.exportSTL(),
       '#0369a1'
     );
     this._addButton(
-      0.14, -0.25, 0.22, 0.08,
+      0.14, -0.27, 0.22, 0.075,
       'Limpiar Todo', '',
       () => this.callbacks.clear(),
       '#374151'

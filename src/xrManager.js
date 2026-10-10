@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+import { SmartPlacement } from './smartPlacement.js';
 
 export class XRManager {
   constructor(renderer, scene, camera, csgEngine, spatialUI) {
@@ -21,8 +22,74 @@ export class XRManager {
     this.grabDistance = 1.0;
     this.grabRotationOffset = new THREE.Quaternion();
 
+    // Smart Placement & Workplane system
+    this.smartPlacement = new SmartPlacement(0.025, 0.0);
+    this.lastHapticTime = 0;
+    this.lastSnappedTarget = null;
+
+    // Affordance Ring & Visual Transform Gizmo
+    this._createAffordanceGizmo();
+
     this.isArSession = false;
     this._initXR();
+  }
+
+  _createAffordanceGizmo() {
+    this.affordanceGizmo = new THREE.Group();
+    this.affordanceGizmo.name = 'affordance_gizmo';
+    this.affordanceGizmo.visible = false;
+
+    // Outer cyan ring
+    const ringGeom = new THREE.RingGeometry(0.14, 0.155, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8
+    });
+    const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+    ringMesh.rotation.x = -Math.PI / 2;
+    this.affordanceGizmo.add(ringMesh);
+
+    // Inner dashed indicator
+    const innerRingGeom = new THREE.RingGeometry(0.09, 0.095, 24);
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: 0x0ea5e9,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.5
+    });
+    const innerMesh = new THREE.Mesh(innerRingGeom, innerMat);
+    innerMesh.rotation.x = -Math.PI / 2;
+    this.affordanceGizmo.add(innerMesh);
+
+    // Label badge canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.beginPath();
+    ctx.roundRect(8, 8, 496, 112, 24);
+    ctx.fill();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 34px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('↑↓ Profundidad  |  ⤡ Escala', 256, 64);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    this.affordanceBadge = new THREE.Sprite(spriteMat);
+    this.affordanceBadge.scale.set(0.35, 0.09, 1);
+    this.affordanceBadge.position.set(0, 0.18, 0);
+    this.affordanceGizmo.add(this.affordanceBadge);
+
+    this.scene.add(this.affordanceGizmo);
   }
 
   _initXR() {
@@ -34,6 +101,14 @@ export class XRManager {
       controller.userData.id = i;
       this.scene.add(controller);
       this.controllers.push(controller);
+
+      // Track input source connection to read gamepad thumbstick and haptics
+      controller.addEventListener('connected', (event) => {
+        controller.userData.inputSource = event.data;
+      });
+      controller.addEventListener('disconnected', () => {
+        controller.userData.inputSource = null;
+      });
 
       // Visual Laser Pointer
       const laserGeom = new THREE.BufferGeometry().setFromPoints([
@@ -71,6 +146,17 @@ export class XRManager {
     }
   }
 
+  triggerHaptic(controller, intensity = 0.4, durationMs = 20) {
+    const now = performance.now();
+    if (now - this.lastHapticTime < 140) return; // throttle to avoid jitter
+    this.lastHapticTime = now;
+
+    const inputSource = controller.userData?.inputSource;
+    if (inputSource && inputSource.gamepad && inputSource.gamepad.hapticActuators && inputSource.gamepad.hapticActuators[0]) {
+      inputSource.gamepad.hapticActuators[0].pulse(intensity, durationMs).catch(() => {});
+    }
+  }
+
   _getIntersections(controller, objects) {
     this.tempMatrix.identity().extractRotation(controller.matrixWorld);
     this.raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
@@ -83,6 +169,7 @@ export class XRManager {
     const uiHits = this._getIntersections(controller, this.spatialUI.buttons);
     const hitBtn = this.spatialUI.handleRayIntersection(uiHits);
     if (hitBtn) {
+      this.triggerHaptic(controller, 0.3, 15);
       this.spatialUI.triggerButton(hitBtn);
       return;
     }
@@ -91,7 +178,6 @@ export class XRManager {
     const cadHits = this._getIntersections(controller, this.csgEngine.objects);
     if (cadHits.length > 0) {
       let hitMesh = cadHits[0].object;
-      // Navigate to top cad object if hit wireframe
       while (hitMesh && !hitMesh.userData.isCadObject && hitMesh.parent) {
         hitMesh = hitMesh.parent;
       }
@@ -100,7 +186,7 @@ export class XRManager {
         this.grabbedObject = hitMesh;
         this.grabbingController = controller;
 
-        // Toggle or set selection
+        // Set selection
         this.csgEngine.selectedObjects.clear();
         this.csgEngine.selectedObjects.add(hitMesh);
 
@@ -111,14 +197,29 @@ export class XRManager {
         // Calculate rotation offset
         const invControllerRot = controller.quaternion.clone().invert();
         this.grabRotationOffset.copy(invControllerRot.multiply(hitMesh.quaternion));
+
+        // Show affordance ring
+        this.affordanceGizmo.visible = true;
+        this.affordanceGizmo.position.copy(hitMesh.position);
+
+        this.triggerHaptic(controller, 0.5, 25);
       }
     }
   }
 
   _onSelectEnd(controller) {
     if (this.grabbingController === controller) {
+      if (this.grabbedObject) {
+        // Final placement: check table drop and grid snap on release
+        const { halfY } = this.smartPlacement.getObjectDimensions(this.grabbedObject);
+        this.smartPlacement.applyTableSnap(this.grabbedObject.position, halfY);
+        this.grabbedObject.updateMatrixWorld(true);
+      }
+
       this.grabbedObject = null;
       this.grabbingController = null;
+      this.affordanceGizmo.visible = false;
+      this.lastSnappedTarget = null;
     }
   }
 
@@ -127,27 +228,90 @@ export class XRManager {
     const selected = Array.from(this.csgEngine.selectedObjects)[0];
     if (selected) {
       this.csgEngine.toggleHole(selected);
+      this.triggerHaptic(controller, 0.6, 30);
     }
   }
 
   _onSqueezeEnd(controller) {}
 
   update() {
-    // Update laser lengths and handle 6DoF dragging
     for (const controller of this.controllers) {
       const laser = controller.getObjectByName('laser');
       const reticle = controller.getObjectByName('reticle');
 
       if (this.grabbedObject && this.grabbingController === controller) {
-        // Dragging object in 3D space
+        // Read Thumbstick axes from WebXR Gamepad:
+        // axes[2] = Thumbstick Horizontal (Scale)
+        // axes[3] = Thumbstick Vertical (Push/Pull depth)
+        const inputSource = controller.userData?.inputSource;
+        if (inputSource && inputSource.gamepad && inputSource.gamepad.axes) {
+          const axes = inputSource.gamepad.axes;
+          const stickX = axes[2] || 0;
+          const stickY = axes[3] || 0;
+
+          // Continuous scaling with stick X
+          if (Math.abs(stickX) > 0.18) {
+            const scaleDelta = 1.0 + stickX * 0.015;
+            this.grabbedObject.scale.multiplyScalar(scaleDelta);
+            this.grabbedObject.scale.clampScalar(0.08, 4.0);
+          }
+
+          // Depth Push/Pull with stick Y
+          if (Math.abs(stickY) > 0.18) {
+            this.grabDistance += stickY * 0.012;
+            this.grabDistance = THREE.MathUtils.clamp(this.grabDistance, 0.2, 4.0);
+          }
+        }
+
+        // Base raycast target position
         const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(controller.quaternion);
-        const targetPos = controller.position.clone().add(dir.multiplyScalar(this.grabDistance));
+        let targetPos = controller.position.clone().add(dir.clone().multiplyScalar(this.grabDistance));
+
+        // Smart Placement: Surface & Face Snapping (SketchForge placementWorkplane)
+        const candidateTargets = this.csgEngine.objects.filter(obj => obj !== this.grabbedObject);
+        const surfaceHits = this._getIntersections(controller, candidateTargets);
+
+        let didSnapToSurface = false;
+        if (surfaceHits.length > 0) {
+          const hit = surfaceHits[0];
+          // Check if ray hit is close to our current hold position (within 12 cm)
+          if (Math.abs(hit.distance - this.grabDistance) < 0.18) {
+            const snapData = this.smartPlacement.calculateSurfaceSnap(hit, this.grabbedObject);
+            if (snapData) {
+              targetPos.copy(snapData.position);
+              didSnapToSurface = true;
+
+              if (this.lastSnappedTarget !== hit.object) {
+                this.triggerHaptic(controller, 0.45, 18);
+                this.lastSnappedTarget = hit.object;
+              }
+            }
+          }
+        }
+
+        if (!didSnapToSurface) {
+          this.lastSnappedTarget = null;
+          // Apply Table Snap & Workplane Grid
+          const { halfY } = this.smartPlacement.getObjectDimensions(this.grabbedObject);
+          const isTable = this.smartPlacement.applyTableSnap(targetPos, halfY);
+          if (isTable) {
+            // Snap to 2.5cm grid on the table
+            targetPos.x = Math.round(targetPos.x / 0.025) * 0.025;
+            targetPos.z = Math.round(targetPos.z / 0.025) * 0.025;
+          }
+        }
+
         this.grabbedObject.position.copy(targetPos);
 
         // Rotate with controller
         const targetRot = controller.quaternion.clone().multiply(this.grabRotationOffset);
         this.grabbedObject.quaternion.copy(targetRot);
         this.grabbedObject.updateMatrixWorld(true);
+
+        // Update Affordance Gizmo
+        this.affordanceGizmo.position.copy(this.grabbedObject.position);
+        this.affordanceGizmo.position.y += 0.005;
+        this.affordanceBadge.lookAt(this.camera.position);
 
         if (laser) laser.scale.z = this.grabDistance / 3;
         if (reticle) reticle.position.z = -this.grabDistance;
@@ -190,6 +354,7 @@ export class XRManager {
 
     session.addEventListener('end', () => {
       this.isArSession = false;
+      this.affordanceGizmo.visible = false;
       if (onSessionEnded) onSessionEnded();
     });
 
