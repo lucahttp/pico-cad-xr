@@ -8,11 +8,13 @@ export class SpatialUI {
     this.container = new THREE.Group();
     this.container.name = 'spatial_ui_container';
 
-    // Position floating panel on user's left front in VR (ergonomic desk view)
-    this.container.position.set(-0.55, 1.15, -0.65);
-    this.container.rotation.y = Math.PI / 5.2;
+    // Position ergonomically on the user's left flank, tilted gently toward the viewer
+    this.container.position.set(-0.42, 0.94, -0.54);
+    this.container.rotation.y = Math.PI / 5.5;
+    this.container.rotation.x = -Math.PI / 20;
 
-    this.currentTab = 'primitives'; // 'primitives' | 'modify' | 'csg' | 'materials' | 'export'
+    this.currentTab = 'primitives'; // 'primitives' | 'csg' | 'materials' | 'scene'
+    this.isMinimized = false;
     this.activeColor = '#2563eb';
     this.activeMaterial = 'basic';
     this.gridSnapEnabled = true;
@@ -21,12 +23,12 @@ export class SpatialUI {
     this._rebuildPanel();
   }
 
-  _createTexture(drawFn) {
+  _createTexture(drawFn, width = 512, height = 256) {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 256;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
-    drawFn(ctx, 512, 256);
+    drawFn(ctx, width, height);
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
     return texture;
@@ -43,88 +45,73 @@ export class SpatialUI {
     });
     this.buttons = [];
 
-    // Remove old content children
     const toRemove = [];
-    this.container.children.forEach(c => {
-      if (c.name !== 'base_frame') toRemove.push(c);
-    });
+    this.container.children.forEach(c => toRemove.push(c));
     toRemove.forEach(c => this.container.remove(c));
   }
 
   _addButton(x, y, w, h, label, sublabel, action, options = {}) {
-    const geom = new THREE.BoxGeometry(w, h, 0.016);
+    const geom = new THREE.BoxGeometry(w, h, 0.01);
     const {
-      bgColor = '#111827',
-      borderColor = options.active ? '#38bdf8' : 'rgba(56, 189, 248, 0.35)',
+      bgColor = '#0f172a',
+      borderColor = options.active ? '#38bdf8' : 'rgba(56, 189, 248, 0.22)',
       textColor = '#f8fafc',
-      badge = '',
-      colorDot = null
+      colorDot = null,
+      fontSize = 28
     } = options;
 
     const texture = this._createTexture((ctx, width, height) => {
-      // Background with rounded corners
+      // Rounded dark glass button
       ctx.fillStyle = bgColor;
       ctx.beginPath();
-      ctx.roundRect(8, 8, width - 16, height - 16, 24);
+      ctx.roundRect(8, 8, width - 16, height - 16, 22);
       ctx.fill();
 
-      // Border glow if active or standard border
-      ctx.lineWidth = options.active ? 8 : 4;
+      // Border glow
+      ctx.lineWidth = options.active ? 6 : 3;
       ctx.strokeStyle = borderColor;
       ctx.stroke();
 
-      // Color Dot indicator if provided
+      // Color Dot indicator if present
       if (colorDot) {
         ctx.fillStyle = colorDot;
         ctx.beginPath();
-        ctx.arc(60, height / 2, 28, 0, Math.PI * 2);
+        ctx.arc(56, height / 2, 22, 0, Math.PI * 2);
         ctx.fill();
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 3;
         ctx.strokeStyle = '#ffffff';
         ctx.stroke();
       }
 
       // Main Text
       ctx.fillStyle = textColor;
-      ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
       ctx.textAlign = colorDot ? 'left' : 'center';
       ctx.textBaseline = 'middle';
-      const textX = colorDot ? 110 : width / 2;
-      const textY = sublabel ? (height / 2 - 20) : (height / 2);
+      const textX = colorDot ? 98 : width / 2;
+      const textY = sublabel ? (height / 2 - 16) : (height / 2);
       ctx.fillText(label, textX, textY);
 
       // Sublabel
       if (sublabel) {
         ctx.fillStyle = '#94a3b8';
-        ctx.font = '24px sans-serif';
-        ctx.fillText(sublabel, textX, height / 2 + 28);
+        ctx.font = '20px sans-serif';
+        ctx.fillText(sublabel, textX, height / 2 + 22);
       }
-
-      // Badge
-      if (badge) {
-        ctx.fillStyle = '#0284c7';
-        ctx.beginPath();
-        ctx.roundRect(width - 120, 16, 100, 36, 12);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(badge, width - 70, 34);
-      }
-    });
+    }, 512, 256);
 
     const mat = new THREE.MeshStandardMaterial({
       map: texture,
-      roughness: 0.3,
-      metalness: 0.1
+      roughness: 0.2,
+      metalness: 0.2
     });
 
     const mesh = new THREE.Mesh(geom, mat);
-    mesh.position.set(x, y, 0.016);
+    mesh.position.set(x, y, 0.01);
     mesh.userData = {
       isSpatialButton: true,
       action: action,
-      origZ: 0.016
+      origZ: 0.01
     };
 
     this.container.add(mesh);
@@ -135,78 +122,79 @@ export class SpatialUI {
   _rebuildPanel() {
     this._clearButtons();
 
-    // Base glass frame (Gravity Sketch inspired curved dark glass)
-    if (!this.frame) {
-      const frameGeom = new THREE.BoxGeometry(0.68, 0.88, 0.012);
-      const frameMat = new THREE.MeshPhysicalMaterial({
-        color: 0x070b14,
-        transparent: true,
-        opacity: 0.92,
-        roughness: 0.15,
-        metalness: 0.6,
-        clearcoat: 0.8
-      });
-      this.frame = new THREE.Mesh(frameGeom, frameMat);
-      this.frame.name = 'base_frame';
-      this.container.add(this.frame);
+    if (this.isMinimized) {
+      this._buildMinimizedPill();
+      return;
     }
 
-    // Top Header Banner
+    // Curved Frosted Dark Glass Frame (compact & aesthetic: 0.46m x 0.35m)
+    const frameGeom = new THREE.BoxGeometry(0.48, 0.36, 0.006);
+    const frameMat = new THREE.MeshPhysicalMaterial({
+      color: 0x070b14,
+      transparent: true,
+      opacity: 0.88,
+      roughness: 0.15,
+      metalness: 0.35,
+      clearcoat: 0.8
+    });
+    this.frame = new THREE.Mesh(frameGeom, frameMat);
+    this.frame.name = 'base_frame';
+    this.container.add(this.frame);
+
+    // Slim Modern Header
     const bannerTex = this._createTexture((ctx, w, h) => {
-      const grad = ctx.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, '#0284c7');
-      grad.addColorStop(1, '#6366f1');
-      ctx.fillStyle = grad;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
       ctx.beginPath();
-      ctx.roundRect(8, 8, w - 16, h - 16, 20);
+      ctx.roundRect(8, 8, w - 16, h - 16, 18);
       ctx.fill();
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 40px sans-serif';
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 30px sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('SketchForge XR', 32, h / 2 - 12);
+      ctx.fillText('💎 PICO CAD XR', 24, h / 2);
 
-      ctx.fillStyle = '#e0f2fe';
-      ctx.font = '22px sans-serif';
-      ctx.fillText('PICO 4 Spatial CAD Studio', 34, h / 2 + 30);
-
-      // Status pill
-      ctx.fillStyle = 'rgba(16, 185, 129, 0.3)';
-      ctx.beginPath();
-      ctx.roundRect(w - 180, 24, 150, 48, 24);
-      ctx.fill();
       ctx.fillStyle = '#34d399';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('● 72 FPS MR', w - 105, 48);
-    });
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('● Passthrough MR', w - 24, h / 2);
+    }, 512, 128);
 
     const banner = new THREE.Mesh(
-      new THREE.BoxGeometry(0.64, 0.085, 0.015),
+      new THREE.BoxGeometry(0.34, 0.042, 0.008),
       new THREE.MeshStandardMaterial({ map: bannerTex })
     );
-    banner.position.set(0, 0.37, 0.015);
+    banner.position.set(-0.05, 0.146, 0.008);
     this.container.add(banner);
 
-    // Tab Bar (Row of 5 tabs)
+    // Minimize Button (Top Right corner)
+    this._addButton(
+      0.18, 0.146, 0.09, 0.042,
+      '➖ Ocultar', '',
+      () => {
+        this.isMinimized = true;
+        this._rebuildPanel();
+      },
+      { bgColor: '#1e293b', borderColor: '#475569', fontSize: 24 }
+    );
+
+    // 4 High-Utility Tabs
     const tabs = [
-      { id: 'primitives', label: 'Primitivas' },
-      { id: 'modify', label: 'Modificar' },
-      { id: 'csg', label: 'CSG Booleans' },
-      { id: 'materials', label: 'Materiales' },
-      { id: 'export', label: 'Exportar' }
+      { id: 'primitives', label: '🧱 Formas' },
+      { id: 'csg', label: '⚡ Booleans' },
+      { id: 'materials', label: '🎨 Color' },
+      { id: 'scene', label: '💾 Escena' }
     ];
-    const tabW = 0.12;
-    const startX = -0.24;
+    const tabW = 0.11;
+    const startX = -0.165;
 
     tabs.forEach((tab, i) => {
       const isActive = this.currentTab === tab.id;
       this._addButton(
         startX + i * tabW,
-        0.285,
-        tabW - 0.008,
-        0.055,
+        0.098,
+        tabW - 0.006,
+        0.038,
         tab.label,
         '',
         () => {
@@ -214,20 +202,17 @@ export class SpatialUI {
           this._rebuildPanel();
         },
         {
-          bgColor: isActive ? '#0284c7' : '#1e293b',
-          borderColor: isActive ? '#38bdf8' : 'rgba(255,255,255,0.1)',
-          active: isActive
+          bgColor: isActive ? '#0284c7' : '#0f172a',
+          borderColor: isActive ? '#38bdf8' : 'rgba(255,255,255,0.12)',
+          active: isActive,
+          fontSize: 22
         }
       );
     });
 
-    // Content based on selected tab
     switch (this.currentTab) {
       case 'primitives':
         this._buildPrimitivesTab();
-        break;
-      case 'modify':
-        this._buildModifyTab();
         break;
       case 'csg':
         this._buildCSGTab();
@@ -235,165 +220,112 @@ export class SpatialUI {
       case 'materials':
         this._buildMaterialsTab();
         break;
-      case 'export':
-        this._buildExportTab();
+      case 'scene':
+        this._buildSceneTab();
         break;
     }
   }
 
+  _buildMinimizedPill() {
+    // Elegant floating micro-pill (0.24m x 0.05m) that leaves passthrough completely clear
+    const frameGeom = new THREE.BoxGeometry(0.24, 0.052, 0.006);
+    const frameMat = new THREE.MeshPhysicalMaterial({
+      color: 0x070b14,
+      transparent: true,
+      opacity: 0.9,
+      roughness: 0.15,
+      metalness: 0.4
+    });
+    this.frame = new THREE.Mesh(frameGeom, frameMat);
+    this.container.add(this.frame);
+
+    this._addButton(
+      0, 0, 0.22, 0.044,
+      '💎 Abrir CAD Dock', 'Passthrough limpio',
+      () => {
+        this.isMinimized = false;
+        this._rebuildPanel();
+      },
+      { bgColor: '#0284c7', borderColor: '#38bdf8', active: true, fontSize: 24 }
+    );
+  }
+
   _buildPrimitivesTab() {
     const items = [
-      { id: 'box', label: '+ Cubo', sub: '20×20×20 cm' },
-      { id: 'cylinder', label: '+ Cilindro', sub: 'Ø20 × H20 cm' },
-      { id: 'sphere', label: '+ Esfera', sub: 'Ø20 cm' },
-      { id: 'cone', label: '+ Cono', sub: 'Ø20 × H20 cm' },
+      { id: 'box', label: '+ Cubo', sub: '200 mm' },
+      { id: 'cylinder', label: '+ Cilindro', sub: 'Ø200 mm' },
+      { id: 'sphere', label: '+ Esfera', sub: 'Ø200 mm' },
+      { id: 'cone', label: '+ Cono', sub: 'Ø200 mm' },
       { id: 'wedge', label: '+ Cuña', sub: 'Rampa 45°' },
-      { id: 'pyramid', label: '+ Pirámide', sub: 'Base 4 caras' },
-      { id: 'torus', label: '+ Torus', sub: 'Anillo R10/r3' },
-      { id: 'roof', label: '+ Techo', sub: 'Prisma triangular' }
+      { id: 'pyramid', label: '+ Pirámide', sub: 'Base 4' },
+      { id: 'torus', label: '+ Torus', sub: 'Anillo' },
+      { id: 'roof', label: '+ Techo', sub: 'Prisma' }
     ];
 
-    const colW = 0.28;
-    const rowH = 0.08;
-    const startY = 0.18;
+    const colW = 0.21;
+    const rowH = 0.042;
+    const startY = 0.036;
 
     items.forEach((item, idx) => {
       const col = idx % 2;
       const row = Math.floor(idx / 2);
-      const x = col === 0 ? -0.15 : 0.15;
-      const y = startY - row * (rowH + 0.015);
+      const x = col === 0 ? -0.11 : 0.11;
+      const y = startY - row * (rowH + 0.008);
 
       this._addButton(
         x, y, colW, rowH,
         item.label, item.sub,
         () => this.callbacks.addPrimitive(item.id),
-        { bgColor: '#0f172a', borderColor: '#38bdf8' }
+        { bgColor: '#0f172a', borderColor: '#38bdf8', fontSize: 24 }
       );
     });
 
-    // Footer quick hint
-    this._addFooterHint('Apunte con el láser y presione el gatillo para añadir a la mesa.');
-  }
-
-  _buildModifyTab() {
-    const colW = 0.28;
-    const rowH = 0.08;
-
-    // Direct Scaling
-    this._addButton(
-      -0.15, 0.18, colW, rowH,
-      'Escalar +10%', 'Agrandar fino',
-      () => this.callbacks.scaleSelected && this.callbacks.scaleSelected(1.10),
-      { bgColor: '#1e293b' }
-    );
-    this._addButton(
-      0.15, 0.18, colW, rowH,
-      'Escalar -10%', 'Reducir fino',
-      () => this.callbacks.scaleSelected && this.callbacks.scaleSelected(0.90),
-      { bgColor: '#1e293b' }
-    );
-
-    this._addButton(
-      -0.15, 0.08, colW, rowH,
-      'Escalar +25%', 'Agrandar paso',
-      () => this.callbacks.scaleSelected && this.callbacks.scaleSelected(1.25),
-      { bgColor: '#1e293b' }
-    );
-    this._addButton(
-      0.15, 0.08, colW, rowH,
-      'Escalar -25%', 'Reducir paso',
-      () => this.callbacks.scaleSelected && this.callbacks.scaleSelected(0.75),
-      { bgColor: '#1e293b' }
-    );
-
-    // Drop to workplane & Rotate
-    this._addButton(
-      -0.15, -0.02, colW, rowH,
-      'Bajar a Mesa (Y=0)', 'Asentar base al plano',
-      () => this.callbacks.dropToWorkplane && this.callbacks.dropToWorkplane(),
-      { bgColor: '#0369a1', borderColor: '#38bdf8' }
-    );
-    this._addButton(
-      0.15, -0.02, colW, rowH,
-      'Rotar 90° (Y)', 'Giro en cuarto de vuelta',
-      () => this.callbacks.rotateSelected && this.callbacks.rotateSelected(0, Math.PI / 2, 0),
-      { bgColor: '#1e293b' }
-    );
-
-    // Magnet Grid Snap toggle & Reset
-    this._addButton(
-      -0.15, -0.12, colW, rowH,
-      this.gridSnapEnabled ? 'Snap Grilla: ON' : 'Snap Grilla: OFF',
-      'Paso magnético 25mm',
-      () => {
-        this.gridSnapEnabled = !this.gridSnapEnabled;
-        if (this.callbacks.toggleGridSnap) this.callbacks.toggleGridSnap(this.gridSnapEnabled);
-        this._rebuildPanel();
-      },
-      {
-        bgColor: this.gridSnapEnabled ? '#065f46' : '#374151',
-        borderColor: this.gridSnapEnabled ? '#10b981' : '#6b7280'
-      }
-    );
-    this._addButton(
-      0.15, -0.12, colW, rowH,
-      'Restaurar Escala 1:1', 'Reset a 20 cm',
-      () => this.callbacks.resetScale && this.callbacks.resetScale(),
-      { bgColor: '#334155' }
-    );
-
-    this._addFooterHint('También puede usar el thumbstick del mando para redimensionar en mano.');
+    this._addFooterHint('✨ Modificación directa: Apunte a las esferas del objeto para estirarlo.');
   }
 
   _buildCSGTab() {
-    const colW = 0.28;
-    const rowH = 0.085;
+    const colW = 0.21;
+    const rowH = 0.048;
 
-    // Solid vs Hole Toggle
     this._addButton(
-      -0.15, 0.16, colW, rowH,
-      'Sólido / Hueco', 'Alternar cortador',
+      -0.11, 0.028, colW, rowH,
+      '🕳️ Sólido / Hueco', 'Alternar cortador',
       () => this.callbacks.toggleHole(),
-      { bgColor: '#475569', borderColor: '#94a3b8' }
+      { bgColor: '#334155', borderColor: '#94a3b8', fontSize: 24 }
     );
 
-    // CSG Grouping (Union or Subtraction)
     this._addButton(
-      0.15, 0.16, colW, rowH,
-      '⚡ Agrupar CSG', 'Unión o Corte booleano',
+      0.11, 0.028, colW, rowH,
+      '⚡ Agrupar CSG', 'Unión o Sustracción',
       () => this.callbacks.group(),
-      { bgColor: '#15803d', borderColor: '#22c55e', active: true }
+      { bgColor: '#15803d', borderColor: '#22c55e', active: true, fontSize: 24 }
     );
 
-    // CSG Intersection
     this._addButton(
-      -0.15, 0.05, colW, rowH,
-      '✂️ Intersección', 'Preservar solapamiento',
+      -0.11, -0.032, colW, rowH,
+      '✂️ Intersección', 'Preservar cruce',
       () => this.callbacks.intersect && this.callbacks.intersect(),
-      { bgColor: '#7c2d12', borderColor: '#ea580c' }
+      { bgColor: '#7c2d12', borderColor: '#ea580c', fontSize: 24 }
     );
 
-    // Duplicate
     this._addButton(
-      0.15, 0.05, colW, rowH,
-      '📋 Duplicar', 'Clonar pieza seleccionada',
+      0.11, -0.032, colW, rowH,
+      '📋 Duplicar', 'Clonar seleccionado',
       () => this.callbacks.duplicate(),
-      { bgColor: '#1e293b' }
+      { bgColor: '#1e293b', fontSize: 24 }
     );
 
-    // Delete
     this._addButton(
-      0, -0.06, 0.58, rowH,
-      '🗑️ Eliminar Seleccionado', 'Remover de la escena',
+      0, -0.092, 0.43, rowH,
+      '🗑️ Eliminar Seleccionado', 'Remover del espacio',
       () => this.callbacks.delete(),
-      { bgColor: '#7f1d1d', borderColor: '#ef4444' }
+      { bgColor: '#7f1d1d', borderColor: '#ef4444', fontSize: 24 }
     );
 
-    this._addFooterHint('Para cortar: seleccione una pieza sólida y una hueca, luego pulse Agrupar.');
+    this._addFooterHint('Combine sólidos y huecos para vaciar o perforar piezas.');
   }
 
   _buildMaterialsTab() {
-    // Gravity Sketch 6.0 style Color and Material selector!
     const colors = [
       { hex: '#2563eb', name: 'Azul CAD' },
       { hex: '#f97316', name: 'Naranja' },
@@ -405,15 +337,15 @@ export class SpatialUI {
       { hex: '#1e293b', name: 'Grafito' }
     ];
 
-    const colW = 0.28;
-    const rowH = 0.065;
-    const startY = 0.18;
+    const colW = 0.21;
+    const rowH = 0.038;
+    const startY = 0.038;
 
     colors.forEach((c, idx) => {
       const col = idx % 2;
       const row = Math.floor(idx / 2);
-      const x = col === 0 ? -0.15 : 0.15;
-      const y = startY - row * (rowH + 0.012);
+      const x = col === 0 ? -0.11 : 0.11;
+      const y = startY - row * (rowH + 0.006);
       const isSelected = this.activeColor === c.hex;
 
       this._addButton(
@@ -428,89 +360,71 @@ export class SpatialUI {
           bgColor: '#0f172a',
           colorDot: c.hex,
           active: isSelected,
-          borderColor: isSelected ? '#38bdf8' : 'rgba(255,255,255,0.1)'
+          borderColor: isSelected ? '#38bdf8' : 'rgba(255,255,255,0.1)',
+          fontSize: 22
         }
       );
     });
 
-    // Material finish row (Basic, Reflective, Clay)
-    const finishes = [
-      { id: 'basic', label: 'Básico CAD' },
-      { id: 'reflective', label: 'Reflectivo' },
-      { id: 'clay', label: 'Arcilla / Clay' }
-    ];
-    const finW = 0.18;
-    finishes.forEach((f, i) => {
-      const isCur = this.activeMaterial === f.id;
-      this._addButton(
-        -0.19 + i * (finW + 0.01),
-        -0.15,
-        finW,
-        0.06,
-        f.label,
-        '',
-        () => {
-          this.activeMaterial = f.id;
-          if (this.callbacks.setMaterialStyle) this.callbacks.setMaterialStyle(f.id);
-          this._rebuildPanel();
-        },
-        {
-          bgColor: isCur ? '#0284c7' : '#1e293b',
-          active: isCur
-        }
-      );
-    });
-
-    this._addFooterHint('Seleccione un objeto para aplicar el color o acabado de material.');
+    this._addFooterHint('Seleccione cualquier pieza para aplicarle el color al instante.');
   }
 
-  _buildExportTab() {
-    const fullW = 0.58;
-    const rowH = 0.085;
+  _buildSceneTab() {
+    const fullW = 0.43;
+    const rowH = 0.046;
 
     this._addButton(
-      0, 0.15, fullW, rowH,
-      '💾 Descargar STL (3D Print)', 'Formato estándar para slicers (Cura/Prusa)',
+      0, 0.034, fullW, rowH,
+      '⬇️ Asentar Todo a Mesa', 'Nivelar objetos a Y = 0',
+      () => this.callbacks.dropToWorkplane && this.callbacks.dropToWorkplane(),
+      { bgColor: '#1e293b', borderColor: '#38bdf8', fontSize: 24 }
+    );
+
+    this._addButton(
+      0, -0.022, fullW, rowH,
+      this.gridSnapEnabled ? '🧲 Snap a Grilla: 25 mm' : '🧲 Snap a Grilla: OFF', 'Imantación magnética',
+      () => {
+        this.gridSnapEnabled = !this.gridSnapEnabled;
+        if (this.callbacks.toggleGridSnap) this.callbacks.toggleGridSnap(this.gridSnapEnabled);
+        this._rebuildPanel();
+      },
+      {
+        bgColor: this.gridSnapEnabled ? '#065f46' : '#374151',
+        borderColor: this.gridSnapEnabled ? '#10b981' : '#6b7280',
+        active: this.gridSnapEnabled,
+        fontSize: 24
+      }
+    );
+
+    this._addButton(
+      0, -0.078, fullW, rowH,
+      '💾 Exportar STL (Impresión 3D)', 'Malla estanca lista para slicer',
       () => this.callbacks.exportSTL(),
-      { bgColor: '#0369a1', borderColor: '#38bdf8', active: true }
+      { bgColor: '#0369a1', borderColor: '#38bdf8', active: true, fontSize: 24 }
     );
 
-    this._addButton(
-      0, 0.04, fullW, rowH,
-      '🌐 Descargar glTF / GLB', 'Modelo 3D con colores y materiales',
-      () => this.callbacks.exportGLTF && this.callbacks.exportGLTF(),
-      { bgColor: '#1e293b' }
-    );
-
-    this._addButton(
-      0, -0.07, fullW, rowH,
-      '🧹 Limpiar Mesa Completa', 'Borrar todas las piezas del espacio',
-      () => this.callbacks.clear(),
-      { bgColor: '#7f1d1d', borderColor: '#ef4444' }
-    );
-
-    this._addFooterHint('Los archivos se descargan directamente en el navegador del PICO.');
+    this._addFooterHint('Los archivos se exportan directo al almacenamiento de su PICO.');
   }
 
   _addFooterHint(text) {
     const hintTex = this._createTexture((ctx, w, h) => {
       ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
       ctx.beginPath();
-      ctx.roundRect(8, 8, w - 16, h - 16, 16);
+      ctx.roundRect(8, 8, w - 16, h - 16, 14);
       ctx.fill();
 
       ctx.fillStyle = '#94a3b8';
-      ctx.font = '22px sans-serif';
+      ctx.font = '19px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, w / 2, h / 2);
-    });
+    }, 512, 80);
 
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.58, 0.045, 0.01),
+      new THREE.BoxGeometry(0.43, 0.028, 0.006),
       new THREE.MeshStandardMaterial({ map: hintTex })
     );
-    mesh.position.set(0, -0.27, 0.015);
+    mesh.position.set(0, -0.144, 0.008);
     this.container.add(mesh);
   }
 
@@ -526,9 +440,9 @@ export class SpatialUI {
   triggerButton(btn) {
     if (!btn || !btn.userData || !btn.userData.action) return;
 
-    btn.position.z = btn.userData.origZ - 0.008;
+    btn.position.z = 0.005;
     setTimeout(() => {
-      btn.position.z = btn.userData.origZ;
+      btn.position.z = btn.userData.origZ || 0.01;
     }, 120);
 
     btn.userData.action();

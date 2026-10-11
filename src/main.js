@@ -259,6 +259,13 @@ class PicoCadApp {
     }
     this._updateSelectionHelper();
     this._syncInspector(obj);
+    if (this.xrManager) {
+      if (obj) {
+        this.xrManager._selectObject(obj);
+      } else {
+        this.xrManager._deselectAll();
+      }
+    }
   }
 
   _updateSelectionHelper() {
